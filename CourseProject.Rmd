@@ -1,0 +1,107 @@
+Analysis of Human Activity Recognition
+=========================================
+
+
+## I Synopsis
+In this report, I create a random forest predictive model to predict classe variable in Human Activity Recognition data, and the prediction accuracy is very high. The dataset is first used in Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence.  
+Read more: http://groupware.les.inf.puc-rio.br/har#sbia_paper_section#ixzz3SVQSyTxz
+
+
+## II Data Processing
+### II-1 Load data
+First, load necessary libraries.
+
+```{r, echo=TRUE}
+library(caret)
+library(randomForest)
+```
+
+Suppose now I have downloaded corresponding train/test datasets, and the current directory has the datasets. I can directly load data into R console. Notice that according to the codebook, the NAs can be "NA", "#DIV/0!" and "".
+
+```{r, echo=TRUE}
+train_data <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+test_data <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+```
+
+I check the train data, and find that there are 160 variables.
+
+```{r, echo=TRUE, eval=FALSE}
+str(train_data)
+```
+
+### II-2 Process data
+With the train data, I need to partition it into training dataset and testing dataset. While, I also notice that the first 8 attributes are actually identifiers of the data, so they are not necessary. And because there are many NAs in the dataset, I remove the columns which have NAs.
+
+```{r, echo=TRUE}
+train <- subset(train_data, select = c(roll_belt: classe))
+train <- train[, apply(train, 2, function(x) !any(is.na(x)))]
+
+inTrain <- createDataPartition(y = train$classe, p = 0.7, list = FALSE)
+training <- train[inTrain, ]
+testing <- train[-inTrain, ]
+```
+
+At last, the variables used in training/testing dataset are illusrated below.
+
+```{r, echo=TRUE}
+names(training)
+```
+
+### II-3 Construct predictive model
+I perfer to leverage random forest to predict classe viarable. The procedure is demonstrated below.
+
+```{r, echo=TRUE, cache=TRUE}
+modelFit <- randomForest(classe ~ ., data = training)
+modelFit
+```
+
+The model's OOB estimate of error rate is just 0.46%. So it seems that the model is very accurate. Now I need to implement cross validation to explore the model further.
+
+```{r, echo=TRUE}
+cross_val <- predict(modelFit, testing)
+confusionMatrix(testing$classe, cross_val)
+```
+
+For the results above, I can observe that the accuracy is very high (more than 99%), and there are few prediction errors with this random forest model. A graph is shown below to demonstrate that.
+
+```{r, echo=TRUE}
+testing$right <- cross_val==testing$classe
+qplot(roll_belt, pitch_belt, colour=right, data=testing, main="Cross Validation")
+```
+
+### II-4 Predict test dataset
+Now, with the random forest predictive model, I exploit it to predict classe variable in the test dataset. First, I implement same processing as training dataset.
+
+```{r, echo=TRUE}
+test <- subset(test_data, select = c(roll_belt: problem_id))
+test <- test[, apply(test, 2, function(x) !any(is.na(x)))]
+test$classe <- c("A", "B", "C", "D", "E")
+test$classe <- as.factor(test$classe)
+test$problem_id <- NULL
+```
+
+After the preprocessing, I use the previous predictive model to predict test dataset.
+
+```{r, echo=TRUE}
+predict(modelFit, test)
+```
+
+
+## III Submit Results
+Now, I need to submit the results onto the Coursera. The functions needed are shown below.
+
+```{r, echo=TRUE}
+submit <- function() {
+    answers <- c("B", "A", "B", "A", "A", "E", "D", "B", "A", "A", 
+                 "B", "C", "B", "A", "E", "E", "A", "B", "B", "B")
+    pml_write_files(answers)
+}
+
+pml_write_files <- function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("problem_id_",i,".txt")
+        write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+}
+```
